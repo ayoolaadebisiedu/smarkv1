@@ -9,7 +9,3 @@ websockets
 python-dotenv
 yfinance
 psycopg2-binary
-feedparser
-vaderSentiment
-beautifulsoup4
-scikit-learn

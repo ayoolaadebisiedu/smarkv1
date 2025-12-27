@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 from .database import SessionLocal, init_db, Asset, Signal, Trade, Account
-from .signal_engine import detect_divergence, detect_macd_cross, detect_sentiment
+from .signal_engine import detect_divergence, detect_macd_cross, detect_sentiment, generate_pro_analysis
 from .risk_manager import RiskManager
 from pydantic import BaseModel
 from typing import List, Optional
@@ -250,6 +250,7 @@ def scan_ticker(ticker: str, db: Session = Depends(get_db)):
     signals = detect_divergence(df)
     signals.extend(detect_macd_cross(df))
     signals.extend(detect_sentiment(ticker))
+    signals.extend(detect_ichimoku_signals(df))
     
     asset = db.query(Asset).filter(Asset.ticker == ticker).first()
     if not asset:
@@ -272,3 +273,30 @@ def scan_ticker(ticker: str, db: Session = Depends(get_db)):
         
     db.commit()
     return {"message": f"Scan complete for {ticker}", "signals_found": len(signals), "details": signals}
+@app.get("/analysis/suggestion/{ticker}")
+def get_analysis_suggestion(ticker: str):
+    """
+    Returns a high-conviction trade setup based on Titan strategies.
+    """
+    df = fetch_live_data(ticker, period="1mo", interval="15m") 
+    if df.empty:
+        df = fetch_live_data(ticker, period="1mo", interval="1h")
+        
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No data found for asset")
+        
+    suggestion = generate_pro_analysis(ticker, df)
+    if not suggestion:
+        return {"ticker": ticker, "recommendation": "NEUTRAL", "reasoning": "Waiting for high-conviction pattern convergence."}
+        
+    return {
+        "ticker": ticker,
+        "recommendation": "BUY" if "Bullish" in suggestion['type'] or "Bull" in suggestion['type'] or "W-Pattern" in suggestion['type'] else "SELL",
+        "entry": suggestion['entry'],
+        "tp": suggestion['tp'],
+        "sl": suggestion['sl'],
+        "strategy": suggestion['strategy'],
+        "reasoning": suggestion['reasoning'],
+        "pattern": suggestion['type'],
+        "confidence": suggestion['confidence']
+    }

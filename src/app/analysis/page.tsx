@@ -4,7 +4,7 @@ import { SignalCard } from '@/components/SignalCard';
 import { ChartComponent } from '@/components/ChartComponent';
 import { TradeModal } from '@/components/TradeModal';
 import { TradeHistory } from '@/components/TradeHistory';
-import { LayoutDashboard, Bell, Settings, PieChart, Activity, Info, Coins, BarChart4, TrendingUp, TrendingDown, XCircle, Wallet } from 'lucide-react';
+import { LayoutDashboard, Bell, Settings, PieChart, Activity, Info, Coins, BarChart4, TrendingUp, TrendingDown, XCircle, Wallet, Target, ShieldCheck, Zap } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
@@ -36,6 +36,7 @@ export default function AnalysisPage() {
     const [signals, setSignals] = useState<any[]>([]);
     const [chartData, setChartData] = useState<any[]>([]);
     const [isScanning, setIsScanning] = useState(false);
+    const [proAnalysis, setProAnalysis] = useState<any>(null);
 
     // Simulation State
     const [accountSummary, setAccountSummary] = useState({ balance: 10000.0, total_pnl: 0, trades_count: 0 });
@@ -133,12 +134,22 @@ export default function AnalysisPage() {
         } catch (e) { console.error(e); }
     };
 
+    const fetchProAnalysis = useCallback(async (ticker: string) => {
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+            const res = await fetch(`${API_URL}/analysis/suggestion/${ticker}`);
+            const data = await res.json();
+            setProAnalysis(data);
+        } catch (e) { console.error(e); }
+    }, []);
+
     const refreshData = async () => {
         setIsScanning(true);
         try {
             await fetch(`http://localhost:8000/scan/${selectedAsset.ticker}`, { method: 'POST' });
             await fetchSignals();
             await fetchHistory(selectedAsset.ticker);
+            await fetchProAnalysis(selectedAsset.ticker);
         } finally {
             setIsScanning(false);
         }
@@ -151,6 +162,7 @@ export default function AnalysisPage() {
         fetchAccount();
         fetchActiveTrades();
         fetchTradeHistory();
+        fetchProAnalysis(selectedAsset.ticker);
 
         // Auto-refresh account & trades
         const interval = setInterval(() => {
@@ -159,7 +171,7 @@ export default function AnalysisPage() {
             fetchTradeHistory();
         }, 10000);
         return () => clearInterval(interval);
-    }, [selectedAsset.ticker, fetchHistory, fetchAccount, fetchActiveTrades, fetchTradeHistory]);
+    }, [selectedAsset.ticker, fetchHistory, fetchAccount, fetchActiveTrades, fetchTradeHistory, fetchProAnalysis]);
 
     if (!mounted) return null;
 
@@ -234,6 +246,63 @@ export default function AnalysisPage() {
                 <div className="flex flex-col xl:flex-row gap-8 relative items-start">
                     {/* Section B: Static Sidebar (Analysis Suggestions) */}
                     <aside className="xl:w-[380px] space-y-8 xl:sticky xl:top-28 w-full">
+                        {/* Pro Trade Execution Plan */}
+                        {proAnalysis && proAnalysis.recommendation !== 'NEUTRAL' && (
+                            <div className="bg-gradient-to-br from-blue-600/20 to-indigo-600/20 border border-blue-500/30 rounded-3xl p-6 shadow-2xl backdrop-blur-md relative overflow-hidden group">
+                                <div className="absolute -right-4 -top-4 text-blue-500/10 group-hover:scale-110 transition-transform duration-700">
+                                    <Zap size={120} />
+                                </div>
+                                <div className="relative z-10">
+                                    <div className="flex justify-between items-start mb-6">
+                                        <div>
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <Target size={16} className="text-blue-400" />
+                                                <h2 className="text-xs font-black text-blue-400 uppercase tracking-[0.2em]">Execution Plan</h2>
+                                            </div>
+                                            <h3 className="text-xl font-black text-white uppercase tracking-tight">{proAnalysis.strategy}</h3>
+                                        </div>
+                                        <div className={cn(
+                                            "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                                            proAnalysis.recommendation === 'BUY' ? "bg-emerald-500 text-white" : "bg-rose-500 text-white"
+                                        )}>
+                                            {proAnalysis.recommendation === 'BUY' ? 'LONG' : 'SHORT'}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-3 gap-4 mb-6">
+                                        <div className="bg-slate-950/40 p-3 rounded-2xl border border-white/5">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold block mb-1">Entry</span>
+                                            <span className="text-white font-mono text-xs">${proAnalysis.entry?.toFixed(2)}</span>
+                                        </div>
+                                        <div className="bg-slate-950/40 p-3 rounded-2xl border border-white/5">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold block mb-1">T. Profit</span>
+                                            <span className="text-emerald-400 font-mono text-xs">${proAnalysis.tp?.toFixed(2)}</span>
+                                        </div>
+                                        <div className="bg-slate-950/40 p-3 rounded-2xl border border-white/5">
+                                            <span className="text-[8px] uppercase text-slate-500 font-bold block mb-1">S. Loss</span>
+                                            <span className="text-rose-400 font-mono text-xs">${proAnalysis.sl?.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-950/60 p-4 rounded-2xl border border-white/5 mb-6">
+                                        <p className="text-[10px] text-slate-400 leading-relaxed font-medium italic">
+                                            "{proAnalysis.reasoning}"
+                                        </p>
+                                    </div>
+
+                                    <button
+                                        onClick={() => {
+                                            setModalDirection(proAnalysis.recommendation === 'BUY' ? 'buy' : 'sell');
+                                            setIsModalOpen(true);
+                                        }}
+                                        className="w-full py-4 bg-white text-slate-950 rounded-2xl font-black text-xs uppercase tracking-widest hover:bg-blue-400 transition-colors shadow-lg shadow-blue-500/20"
+                                    >
+                                        Execute Institutional Plan
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Live Feed Panel */}
                         <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 shadow-xl backdrop-blur-sm">
                             <div className="flex justify-between items-center mb-6">
@@ -413,8 +482,8 @@ export default function AnalysisPage() {
                 direction={modalDirection}
                 onConfirm={openTrade}
                 currentPrice={chartData.length > 0 ? chartData[chartData.length - 1].value : 0}
-                suggestedSL={signals.find(s => s.ticker === selectedAsset.ticker)?.sl}
-                suggestedTP={signals.find(s => s.ticker === selectedAsset.ticker)?.tp}
+                suggestedSL={proAnalysis?.sl || signals.find(s => s.ticker === selectedAsset.ticker)?.sl}
+                suggestedTP={proAnalysis?.tp || signals.find(s => s.ticker === selectedAsset.ticker)?.tp}
             />
         </main>
     );
