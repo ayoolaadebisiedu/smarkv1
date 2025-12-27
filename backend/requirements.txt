@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+pandas
+pandas_ta
+numpy
+sqlalchemy
+pydantic
+websockets
+python-dotenv
+yfinance
+psycopg2-binary
